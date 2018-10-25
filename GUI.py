@@ -439,9 +439,10 @@ class Main(QMainWindow):
         retval = msg.exec_()
 
     def Guide(self):
-        reponse = QMessageBox.information(self, "Check for updates",
-                                          "You are using the latest version of STT EDITOR (1.0.0)",
-                                          QMessageBox.Cancel)
+        url = QtCore.QUrl("https://stt-editor.firebaseapp.com/")
+
+        QDesktopServices.openUrl(url)
+
 
     def Update(self):
        reponse = QMessageBox.information(self, "Check for updates",
