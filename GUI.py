@@ -9,6 +9,9 @@ from PyQt5 import QtGui
 from PyQt5 import QtCore
 from PyQt5.QtCore import *
 from PyQt5 import QtWidgets
+import os
+from tqdm import tqdm
+from multiprocessing.dummy import Pool
 
 
 class Main(QMainWindow):
@@ -287,16 +290,58 @@ class Main(QMainWindow):
         self.text.clear()
 
     def Record(self):
-        self.text.clear()
+        pool = Pool(8)  # Number of concurrent threads
+
+        with open('/home/shimuli/PycharmProjects/example/api-key.json') as f:
+            GOOGLE_CLOUD_SPEECH_CREDENTIALS = f.read()
+
         r = sr.Recognizer()
-        sound = '/home/shimuli/PycharmProjects/Speech Project/sound/What Is Python.wav'
-        with sr.AudioFile(sound) as source:
-            sound = r.listen(source)
-        try:
-            text = r.recognize_google(sound)
-            self.text.setText(text)
-        except Exception as e:
-                print("Network error")
+        files = sorted(os.listdir('/home/shimuli/Desktop/parts/keep/'))
+
+        def transcribe(data):
+            idx, file = data
+            name = '/home/shimuli/Desktop/parts/keep/' + file
+            print(name + " started")
+            # Load audio file
+            with sr.AudioFile(name) as source:
+                audio = r.record(source)
+            # Transcribe audio file
+            text = r.recognize_google_cloud(audio, credentials_json=GOOGLE_CLOUD_SPEECH_CREDENTIALS)
+            print(name + " done")
+            return {
+                "idx": idx,
+                "text": text
+            }
+
+        all_text = pool.map(transcribe, enumerate(files))
+        pool.close()
+        pool.join()
+
+        transcript = ""
+        for t in sorted(all_text, key=lambda x: x['idx']):
+            total_seconds = t['idx'] * 30
+            # Cool shortcut from:
+            # https://stackoverflow.com/questions/775049/python-time-seconds-to-hms
+            # to get hours, minutes and seconds
+            m, s = divmod(total_seconds, 60)
+            h, m = divmod(m, 60)
+
+            # Format time as h:m:s - 30 seconds of text
+            transcript = transcript + "{:0>2d}:{:0>2d}:{:0>2d} {}\n".format(h, m, s, t['text'])
+
+        print(transcript)
+
+        with open("transcript.txt", "w") as f:
+            self.text.setText(transcript)
+        #self.text.clear()
+
+        #with sr.AudioFile(sound2) as source:
+            #sound2 = r.listen(source)
+       # try:
+            #text = r.recognize_google(sound2)
+            #self.text.setText(text)
+        #except Exception as e:
+                #print("Network error")
 
     def Open(self):
         filename = QFileDialog.getOpenFileName(self, 'Open File')
@@ -313,6 +358,19 @@ class Main(QMainWindow):
         f.close()
 
     def Save(self):
+        # Only open dialog if there is no filename yet
+        #if not self.filename:
+            #self.filename = QFileDialog.getSaveFileName(self, 'Save File')
+
+        # Append extension if not there yet
+        #if not self.filename.endswith(".writer"):
+            #self.filename += ".writer"
+
+        # We just store the contents of the text file along with the
+        # format in html, which Qt does in a very nice way for us
+        #with open(self.filename, "wt") as file:
+            #file.write(self.text.toHtml())
+
         filename = self.text.toPlainText()
         with open('Recovered.doc', 'w') as f:
             f.write(filename)
@@ -421,7 +479,7 @@ class Main(QMainWindow):
         msg = QMessageBox()
 
         msg.setIcon(QMessageBox.Information)
-        msg.setStyleSheet("QLabel{min-width:500 px; font-size: 14px;}")
+        #msg.setStyleSheet("QLabel{min-width:500 px; font-size: 14px;}")
         #msg.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Expanding)
         #msg.resize(100, 200)
 
@@ -442,7 +500,6 @@ class Main(QMainWindow):
         url = QtCore.QUrl("https://stt-editor.firebaseapp.com/")
 
         QDesktopServices.openUrl(url)
-
 
     def Update(self):
        reponse = QMessageBox.information(self, "Check for updates",
